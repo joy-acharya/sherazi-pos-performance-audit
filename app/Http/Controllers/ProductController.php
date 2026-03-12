@@ -48,23 +48,20 @@ class ProductController extends Controller
 
     public function dashboard()
     {
-        $totalProducts = Product::all()->count();
-        $totalOrders   = Order::all()->count();
-        $totalRevenue  = Order::all()->sum('total_amount');
-        $categories    = Category::all();
+        $data = Cache::remember('products_dashboard', 300, function () {
+            return [
+                'total_products' => Product::count(),
+                'total_orders' => Order::count(),
+                'total_revenue' => Order::sum('total_amount'),
+                'categories' => Category::select('id', 'name')->get(),
+                'top_products' => Product::select('id', 'name', 'price', 'stock', 'sold_count', 'category_id')
+                    ->orderByDesc('sold_count')
+                    ->take(5)
+                    ->get(),
+            ];
+        });
 
-        $topProducts = Product::all()
-            ->sortByDesc('sold_count')
-            ->take(5)
-            ->values();
-
-        return response()->json([
-            'total_products' => $totalProducts,
-            'total_orders'   => $totalOrders,
-            'total_revenue'  => $totalRevenue,
-            'categories'     => $categories,
-            'top_products'   => $topProducts,
-        ]);
+        return response()->json($data);
     }
 
     public function search(Request $request)
