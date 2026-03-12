@@ -80,13 +80,26 @@ class ProductController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'name'        => 'required|string|max:255',
-            'price'       => 'required|numeric|min:0',
-            'stock'       => 'required|integer|min:0',
+            'name' => 'required|string|max:255',
+            'description' => 'nullable|string',
+            'price' => 'required|numeric|min:0',
+            'stock' => 'required|integer|min:0',
             'category_id' => 'required|exists:categories,id',
         ]);
 
-        $product = Product::create($request->all());
+        $product = Product::create($request->only([
+            'name',
+            'description',
+            'price',
+            'stock',
+            'category_id',
+        ]));
+
+        for ($i = 1; $i <= 50; $i++) {
+            Cache::forget("products_page_{$i}");
+        }
+
+        Cache::forget('products_dashboard');
 
         return response()->json($product, 201);
     }
