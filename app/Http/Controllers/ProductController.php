@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Resources\ProductResource;
+
 use App\Models\Product;
 use App\Models\Category;
 use App\Models\Order;
@@ -11,20 +13,11 @@ class ProductController extends Controller
 {
     public function index()
     {
-        $products = Product::all();
+        $products = Product::with('category')
+            ->select('id', 'name', 'price', 'stock', 'category_id')
+            ->paginate(15);
 
-        $result = [];
-        foreach ($products as $product) {
-            $result[] = [
-                'id'       => $product->id,
-                'name'     => $product->name,
-                'price'    => $product->price,
-                'stock'    => $product->stock,
-                'category' => $product->category->name,
-            ];
-        }
-
-        return response()->json($result);
+        return ProductResource::collection($products);
     }
 
     public function salesReport()
