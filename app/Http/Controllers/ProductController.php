@@ -3,10 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Http\Resources\ProductResource;
+use App\Http\Resources\SalesReportResource;
 
 use App\Models\Product;
 use App\Models\Category;
 use App\Models\Order;
+use App\Models\OrderItem;
+
 use Illuminate\Http\Request;
 
 use Illuminate\Support\Facades\Cache;
@@ -28,22 +31,11 @@ class ProductController extends Controller
 
     public function salesReport()
     {
-        $orders = Order::all();
+        $items = OrderItem::with(['product:id,name', 'order.customer:id,name'])
+            ->select('id', 'order_id', 'product_id', 'quantity', 'unit_price')
+            ->paginate(15);
 
-        $report = [];
-        foreach ($orders as $order) {
-            foreach ($order->items as $item) {
-                $report[] = [
-                    'order_id'     => $order->id,
-                    'product_name' => $item->product->name,
-                    'qty'          => $item->quantity,
-                    'total'        => $item->quantity * $item->product->price,
-                    'customer'     => $order->customer->name,
-                ];
-            }
-        }
-
-        return response()->json($report);
+        return SalesReportResource::collection($items);
     }
 
     public function dashboard()
