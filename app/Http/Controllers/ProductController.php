@@ -9,13 +9,19 @@ use App\Models\Category;
 use App\Models\Order;
 use Illuminate\Http\Request;
 
+use Illuminate\Support\Facades\Cache;
+
 class ProductController extends Controller
 {
     public function index()
     {
-        $products = Product::with('category')
-            ->select('id', 'name', 'price', 'stock', 'category_id')
-            ->paginate(15);
+        $page = request()->get('page', 1);
+
+        $products = Cache::remember("products_page_{$page}", 300, function () {
+            return Product::with('category')
+                ->select('id', 'name', 'price', 'stock', 'category_id')
+                ->paginate(15);
+        });
 
         return ProductResource::collection($products);
     }
