@@ -13,7 +13,7 @@ class SalesReportResource extends JsonResource
             'order_id'     => $this->order_id,
             'product_name' => $this->product?->name,
             'qty'          => $this->quantity,
-            'total'        => $this->quantity * $this->unit_price,
+            'total'        => round($this->quantity * $this->unit_price, 2),
             'customer'     => $this->order?->customer?->name,
         ];
     }
