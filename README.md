@@ -265,6 +265,20 @@ Redis Cache Check
 Return Response
 ```
 
+# Ripo Structure 
+
+sherazi-pos-performance-audit
+│
+├── app/
+├── database/
+│   └── migrations/
+│       └── add_performance_indexes.php
+│
+├── routes/
+├── README.md
+├── composer.json
+└── ...
+
 ------------------------------------------------------------------------
 
 # Technologies
