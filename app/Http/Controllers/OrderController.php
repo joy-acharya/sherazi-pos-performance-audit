@@ -78,9 +78,9 @@ class OrderController extends Controller
 
     public function index()
     {
-        $orders = Order::with('customer')
+        $orders = Order::select('id', 'customer_id', 'total_amount', 'status', 'created_at')
+            ->with('customer')
             ->withCount('items')
-            ->select('id', 'customer_id', 'total_amount', 'status', 'created_at')
             ->latest()
             ->paginate(15);
 
@@ -93,7 +93,8 @@ class OrderController extends Controller
             'status' => 'required|in:pending,completed,cancelled',
         ]);
 
-        $orders = Order::with('customer')
+        $orders = Order::select('id', 'customer_id', 'total_amount', 'status', 'created_at')
+            ->with('customer')
             ->withCount('items')
             ->where('status', $request->status)
             ->latest()
