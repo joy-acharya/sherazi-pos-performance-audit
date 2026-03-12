@@ -17,37 +17,61 @@ class OrderController extends Controller
     {
         $request->validate([
             'customer_id' => 'required|exists:customers,id',
-            'items'       => 'required|array',
+            'items' => 'required|array|min:1',
+            'items.*.product_id' => 'required|exists:products,id',
+            'items.*.quantity' => 'required|integer|min:1',
         ]);
 
-        $totalAmount = 0;
+        $order = DB::transaction(function () use ($request) {
+            $totalAmount = 0;
 
-        $order = Order::create([
-            'customer_id'  => $request->customer_id,
-            'total_amount' => 0,
-            'status'       => 'pending',
-        ]);
-
-        foreach ($request->items as $item) {
-            $product = Product::find($item['product_id']);
-
-            if (!$product || $product->stock < $item['quantity']) {
-                return response()->json(['error' => 'Product unavailable'], 422);
-            }
-
-            OrderItem::create([
-                'order_id'   => $order->id,
-                'product_id' => $item['product_id'],
-                'quantity'   => $item['quantity'],
-                'unit_price' => $product->price,
+            $order = Order::create([
+                'customer_id'  => $request->customer_id,
+                'total_amount' => 0,
+                'status'       => 'pending',
             ]);
 
-            $product->decrement('stock', $item['quantity']);
+            $productIds = collect($request->items)
+                ->pluck('product_id')
+                ->unique()
+                ->values();
 
-            $totalAmount += $product->price * $item['quantity'];
+            $products = Product::whereIn('id', $productIds)
+                ->get()
+                ->keyBy('id');
+
+            foreach ($request->items as $item) {
+                $product = $products->get($item['product_id']);
+
+                if (!$product || $product->stock < $item['quantity']) {
+                    abort(422, 'Product unavailable or insufficient stock');
+                }
+
+                OrderItem::create([
+                    'order_id'   => $order->id,
+                    'product_id' => $item['product_id'],
+                    'quantity'   => $item['quantity'],
+                    'unit_price' => $product->price,
+                ]);
+
+                $product->decrement('stock', $item['quantity']);
+                $product->increment('sold_count', $item['quantity']);
+
+                $totalAmount += $product->price * $item['quantity'];
+            }
+
+            $order->update([
+                'total_amount' => round($totalAmount, 2),
+            ]);
+
+            return $order->load('customer', 'items');
+        });
+
+        for ($i = 1; $i <= 50; $i++) {
+            Cache::forget("products_page_{$i}");
         }
 
-        $order->update(['total_amount' => $totalAmount]);
+        Cache::forget('products_dashboard');
 
         return response()->json($order, 201);
     }
