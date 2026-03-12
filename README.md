@@ -1,59 +1,239 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Sherazi POS Performance Audit
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+This project contains a performance audit and optimization of the
+Sherazi POS API built with Laravel. The goal was to identify performance
+bottlenecks and improve the system's scalability and response
+efficiency.
 
-## About Laravel
+------------------------------------------------------------------------
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+# Project Overview
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+The API manages:
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+-   Products
+-   Orders
+-   Categories
+-   Sales Reports
+-   Dashboard Statistics
 
-## Learning Laravel
+The system originally had several performance issues such as N+1
+queries, inefficient data retrieval, and lack of caching.
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+This audit focuses on identifying those problems and implementing
+scalable solutions.
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+------------------------------------------------------------------------
 
-## Laravel Sponsors
+# Performance Issues Identified
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+## 1. N+1 Query Problem
 
-### Premium Partners
+Several endpoints were loading related data inside loops, which caused
+multiple unnecessary database queries.
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+Example: - Sales report - Orders listing - Product category loading
 
-## Contributing
+This resulted in significant query overhead.
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+### Solution
 
-## Code of Conduct
+Eager loading was introduced using:
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+    with()
+    withCount()
 
-## Security Vulnerabilities
+Example:
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+``` php
+Order::with('customer')
+     ->withCount('items')
+     ->paginate(15);
+```
 
-## License
+This reduces database calls and improves query efficiency.
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+------------------------------------------------------------------------
+
+# 2. Large Response Payload
+
+Some endpoints returned large datasets without pagination.
+
+### Solution
+
+Pagination was implemented using:
+
+``` php
+paginate(15)
+```
+
+Endpoints updated:
+
+-   /api/products
+-   /api/orders
+-   /api/sales-report
+
+Benefits:
+
+-   Reduced payload size
+-   Improved API performance
+-   Better client-side handling
+
+------------------------------------------------------------------------
+
+# 3. Database Indexing
+
+Frequently queried columns were missing database indexes.
+
+### Indexes Added
+
+Products table:
+
+-   name
+-   sold_count
+-   category_id
+
+Orders table:
+
+-   status
+-   customer_id
+-   created_at
+
+Order Items table:
+
+-   order_id
+-   product_id
+
+Example migration:
+
+``` php
+$table->index('name');
+$table->index('sold_count');
+$table->index('category_id');
+```
+
+These indexes improve query performance for:
+
+-   search
+-   sorting
+-   filtering
+-   joins
+
+------------------------------------------------------------------------
+
+# 4. Redis Caching
+
+Certain endpoints repeatedly compute the same data.
+
+Examples:
+
+-   Product list
+-   Dashboard statistics
+
+To reduce database load, Redis caching was implemented.
+
+### Cached Endpoints
+
+GET /api/products\
+GET /api/products/dashboard
+
+### Implementation Example
+
+``` php
+Cache::remember("products_page_{$page}", 300, function () {
+    return Product::with('category')
+        ->select('id','name','price','stock','category_id')
+        ->paginate(15);
+});
+```
+
+Cache TTL: **5 minutes**
+
+Benefits:
+
+-   Reduced database load
+-   Faster repeated responses
+-   Better scalability
+
+------------------------------------------------------------------------
+
+# 5. Query Optimization
+
+### Sales Report Optimization
+
+``` php
+OrderItem::with(['product:id,name','order.customer:id,name'])
+    ->select('id','order_id','product_id','quantity','unit_price')
+    ->paginate(15);
+```
+
+Benefits:
+
+-   Eliminates N+1 queries
+-   Reduces database calls
+-   Improves response time
+
+------------------------------------------------------------------------
+
+# 6. Safe Search Implementation
+
+``` php
+Product::query()
+    ->when($keyword, function ($query) use ($keyword) {
+        $query->where(function ($q) use ($keyword) {
+            $q->where('name','LIKE',"%{$keyword}%")
+              ->orWhere('description','LIKE',"%{$keyword}%");
+        });
+    })
+    ->paginate(15);
+```
+
+Benefits:
+
+-   Safe dynamic queries
+-   Improved readability
+-   Controlled filtering
+
+------------------------------------------------------------------------
+
+# Cache Invalidation Strategy
+
+Whenever new data is created, relevant cache entries are cleared.
+
+Example:
+
+``` php
+Cache::forget('products_dashboard');
+```
+
+------------------------------------------------------------------------
+
+# Technologies Used
+
+-   Laravel
+-   MySQL
+-   Redis
+-   Eloquent ORM
+-   API Resources
+
+------------------------------------------------------------------------
+
+# Key Improvements Summary
+
+  Optimization         Impact
+  -------------------- ------------------------------
+  Eager Loading        Removed N+1 queries
+  Pagination           Reduced payload size
+  Database Indexing    Faster filtering and joins
+  Redis Caching        Reduced database load
+  Query Optimization   Improved response efficiency
+
+------------------------------------------------------------------------
+
+# Conclusion
+
+The API was optimized by applying best practices in database indexing,
+query optimization, caching, and pagination.
+
+These improvements make the system more scalable, efficient, and
+production-ready.
