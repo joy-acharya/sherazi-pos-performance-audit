@@ -1,15 +1,17 @@
 # Sherazi POS Performance Audit
 
-This project contains a performance audit and optimization of the
-Sherazi POS API built with Laravel. The goal was to identify performance
-bottlenecks and improve the system's scalability and response
-efficiency.
+This repository contains a performance audit and optimization of the
+Sherazi POS API built with Laravel.
+
+The objective was to identify performance bottlenecks and implement
+scalable solutions to improve API efficiency, reduce database load, and
+enhance system scalability.
 
 ------------------------------------------------------------------------
 
 # Project Overview
 
-The API manages:
+The system provides APIs for managing:
 
 -   Products
 -   Orders
@@ -17,28 +19,32 @@ The API manages:
 -   Sales Reports
 -   Dashboard Statistics
 
-The system originally had several performance issues such as N+1
-queries, inefficient data retrieval, and lack of caching.
+During the audit, several performance issues were identified including:
 
-This audit focuses on identifying those problems and implementing
-scalable solutions.
+-   N+1 query problems
+-   Unpaginated large responses
+-   Missing database indexes
+-   Repeated heavy queries without caching
+
+These issues were resolved using Laravel best practices.
 
 ------------------------------------------------------------------------
 
-# Performance Issues Identified
+# Performance Issues & Solutions
 
 ## 1. N+1 Query Problem
 
-Several endpoints were loading related data inside loops, which caused
-multiple unnecessary database queries.
+Several endpoints triggered multiple queries when loading relationships.
 
-Example: - Sales report - Orders listing - Product category loading
+Example issues found in:
 
-This resulted in significant query overhead.
+-   Sales report endpoint
+-   Orders list
+-   Product category loading
 
 ### Solution
 
-Eager loading was introduced using:
+Eager loading introduced:
 
     with()
     withCount()
@@ -48,58 +54,61 @@ Example:
 ``` php
 Order::with('customer')
      ->withCount('items')
+     ->latest()
      ->paginate(15);
 ```
 
-This reduces database calls and improves query efficiency.
+Benefits:
+
+-   Fewer database queries
+-   Faster API responses
+-   Reduced database load
 
 ------------------------------------------------------------------------
 
-# 2. Large Response Payload
+## 2. Large Response Payload
 
 Some endpoints returned large datasets without pagination.
 
 ### Solution
 
-Pagination was implemented using:
+Pagination introduced:
 
 ``` php
 paginate(15)
 ```
 
-Endpoints updated:
+Endpoints:
 
--   /api/products
--   /api/orders
--   /api/sales-report
+-   GET /api/products
+-   GET /api/orders
+-   GET /api/sales-report
 
 Benefits:
 
 -   Reduced payload size
--   Improved API performance
--   Better client-side handling
+-   Improved performance
+-   Better frontend handling
 
 ------------------------------------------------------------------------
 
-# 3. Database Indexing
+## 3. Database Indexing
 
-Frequently queried columns were missing database indexes.
+Indexes added to frequently queried columns.
 
-### Indexes Added
-
-Products table:
+### Products
 
 -   name
 -   sold_count
 -   category_id
 
-Orders table:
+### Orders
 
 -   status
 -   customer_id
 -   created_at
 
-Order Items table:
+### Order Items
 
 -   order_id
 -   product_id
@@ -112,32 +121,24 @@ $table->index('sold_count');
 $table->index('category_id');
 ```
 
-These indexes improve query performance for:
+Benefits:
 
--   search
--   sorting
--   filtering
--   joins
+-   Faster filtering
+-   Faster joins
+-   Improved sorting
 
 ------------------------------------------------------------------------
 
-# 4. Redis Caching
+## 4. Redis Caching
 
-Certain endpoints repeatedly compute the same data.
+Frequently requested endpoints cached using Redis.
 
-Examples:
+Cached endpoints:
 
--   Product list
--   Dashboard statistics
+-   GET /api/products
+-   GET /api/products/dashboard
 
-To reduce database load, Redis caching was implemented.
-
-### Cached Endpoints
-
-GET /api/products\
-GET /api/products/dashboard
-
-### Implementation Example
+Example:
 
 ``` php
 Cache::remember("products_page_{$page}", 300, function () {
@@ -152,14 +153,21 @@ Cache TTL: **5 minutes**
 Benefits:
 
 -   Reduced database load
--   Faster repeated responses
--   Better scalability
+-   Faster repeated requests
+-   Improved scalability
 
 ------------------------------------------------------------------------
 
-# 5. Query Optimization
+## 5. Query Optimization
 
-### Sales Report Optimization
+Sales report optimized.
+
+Before:
+
+-   Nested loops
+-   Multiple DB queries
+
+After:
 
 ``` php
 OrderItem::with(['product:id,name','order.customer:id,name'])
@@ -171,11 +179,11 @@ Benefits:
 
 -   Eliminates N+1 queries
 -   Reduces database calls
--   Improves response time
+-   Faster responses
 
 ------------------------------------------------------------------------
 
-# 6. Safe Search Implementation
+## 6. Safe Search Implementation
 
 ``` php
 Product::query()
@@ -190,50 +198,85 @@ Product::query()
 
 Benefits:
 
--   Safe dynamic queries
--   Improved readability
--   Controlled filtering
+-   Safe filtering
+-   Clean query logic
 
 ------------------------------------------------------------------------
 
-# Cache Invalidation Strategy
+# Cache Invalidation
 
-Whenever new data is created, relevant cache entries are cleared.
+Cache cleared when products/orders change.
 
 Example:
 
 ``` php
 Cache::forget('products_dashboard');
+Cache::forget("products_page_{$page}");
 ```
 
 ------------------------------------------------------------------------
 
-# Technologies Used
+# Before vs After Improvements
+
+  Optimization      Before             After
+  ----------------- ------------------ ----------------------------
+  Product queries   N+1 queries        Eager loading
+  Orders list       Multiple queries   Optimized relation loading
+  Sales report      Nested queries     Optimized query
+  Response size     Large payload      Paginated
+  Dashboard         DB every request   Redis cache
+  Search            Full scan          Indexed columns
+
+------------------------------------------------------------------------
+
+# API Endpoints
+
+  Endpoint                         Description
+  -------------------------------- ----------------------
+  GET /api/products                Product list
+  GET /api/products/dashboard      Dashboard statistics
+  GET /api/orders                  Order list
+  POST /api/orders                 Create order
+  GET /api/products/search         Product search
+  GET /api/products/sales-report   Sales report
+
+------------------------------------------------------------------------
+
+# Optimization Architecture
+
+``` text
+Client Request
+      |
+      v
+Laravel Controller
+      |
+      v
+Redis Cache Check
+      |
+  Hit ---- Miss
+   |         |
+   |         v
+   |    Query Database
+   |         |
+   |         v
+   |   Store in Redis
+   |         |
+   v         v
+Return Response
+```
+
+------------------------------------------------------------------------
+
+# Technologies
 
 -   Laravel
 -   MySQL
 -   Redis
 -   Eloquent ORM
--   API Resources
-
-------------------------------------------------------------------------
-
-# Key Improvements Summary
-
-  Optimization         Impact
-  -------------------- ------------------------------
-  Eager Loading        Removed N+1 queries
-  Pagination           Reduced payload size
-  Database Indexing    Faster filtering and joins
-  Redis Caching        Reduced database load
-  Query Optimization   Improved response efficiency
 
 ------------------------------------------------------------------------
 
 # Conclusion
 
-The API was optimized by applying best practices in database indexing,
-query optimization, caching, and pagination.
-
-These improvements make the system more scalable, efficient, and
-production-ready.
+The system now uses optimized queries, Redis caching, database indexing,
+and pagination to ensure better performance and scalability.
