@@ -2,11 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Resources\OrderResource;
+
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
 
 class OrderController extends Controller
 {
@@ -51,21 +54,13 @@ class OrderController extends Controller
 
     public function index()
     {
-        $orders = Order::all();
+        $orders = Order::with('customer')
+            ->withCount('items')
+            ->select('id', 'customer_id', 'total_amount', 'status', 'created_at')
+            ->latest()
+            ->paginate(15);
 
-        $data = [];
-        foreach ($orders as $order) {
-            $data[] = [
-                'id'          => $order->id,
-                'customer'    => $order->customer->name,
-                'total'       => $order->total_amount,
-                'status'      => $order->status,
-                'items_count' => $order->items->count(),
-                'created_at'  => $order->created_at,
-            ];
-        }
-
-        return response()->json($data);
+        return OrderResource::collection($orders);
     }
 
     public function filterByStatus(Request $request)
