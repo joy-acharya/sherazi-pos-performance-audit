@@ -90,7 +90,9 @@ class ProductController extends Controller
             'price',
             'stock',
             'category_id',
-        ]));
+        ]) + [
+            'sold_count' => 0,
+        ]);
 
         for ($i = 1; $i <= 50; $i++) {
             Cache::forget("products_page_{$i}");
