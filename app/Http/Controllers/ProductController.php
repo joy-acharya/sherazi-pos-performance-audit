@@ -58,12 +58,24 @@ class ProductController extends Controller
 
     public function search(Request $request)
     {
-        $keyword  = $request->input('q');
-        $products = Product::where('name', 'LIKE', '%' . $keyword . '%')
-                           ->orWhere('description', 'LIKE', '%' . $keyword . '%')
-                           ->get();
+        $request->validate([
+            'q' => 'nullable|string|max:255',
+        ]);
 
-        return response()->json($products);
+        $keyword = $request->input('q');
+
+        $products = Product::query()
+            ->when($keyword, function ($query) use ($keyword) {
+                $query->where(function ($q) use ($keyword) {
+                    $q->where('name', 'LIKE', "%{$keyword}%")
+                    ->orWhere('description', 'LIKE', "%{$keyword}%");
+                });
+            })
+            ->select('id', 'name', 'description', 'price', 'stock', 'sold_count', 'category_id')
+            ->with('category')
+            ->paginate(15);
+
+        return ProductResource::collection($products);
     }
 
     public function store(Request $request)
