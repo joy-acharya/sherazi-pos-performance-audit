@@ -279,6 +279,21 @@ sherazi-pos-performance-audit
 ├── composer.json
 └── ...
 
+
+Performance Improvement Summary
+
+Products API:
+Before: 554 ms
+After: 169 ms
+
+Sales Report:
+Before: 895 ms
+After: 185 ms
+
+Orders API:
+Before: 509 ms
+After: 190 ms
+
 ------------------------------------------------------------------------
 
 # Technologies
